@@ -49,8 +49,37 @@ fi
 echo "Pushing branch ${BRANCH_NAME}..."
 git push -u origin HEAD
 
-echo "Creating PR for Issue #${ISSUE_ID}..."
-PR_URL=$(gh pr create --title "${ISSUE_TITLE}" --body "Resolves #${ISSUE_ID}")
+# Get the default branch name to ensure PR is created against the correct base
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+
+echo "Creating PR for Issue #${ISSUE_ID} on branch ${BRANCH_NAME} against ${DEFAULT_BRANCH}..."
+# Use retry logic for GitHub API indexing delay
+MAX_RETRIES=3
+RETRY_COUNT=0
+PR_URL=""
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  # Temporarily disable set -e to handle errors in the loop
+  set +e
+  PR_OUTPUT=$(gh pr create --title "${ISSUE_TITLE}" --body "Resolves #${ISSUE_ID}" --base "${DEFAULT_BRANCH}" --head "${BRANCH_NAME}" 2>&1)
+  EXIT_CODE=$?
+  set -e
+  
+  if [ $EXIT_CODE -eq 0 ]; then
+    PR_URL=$PR_OUTPUT
+    break
+  fi
+  
+  echo "PR creation failed, retrying in 5 seconds... ($((RETRY_COUNT + 1))/$MAX_RETRIES)"
+  echo "Error message: $PR_OUTPUT"
+  sleep 5
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+  echo "Error: Failed to create PR after $MAX_RETRIES attempts."
+  exit 1
+fi
 
 echo "Enabling auto-merge..."
 gh pr merge "${PR_URL}" --squash --auto

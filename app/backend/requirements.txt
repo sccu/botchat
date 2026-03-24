@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-multipart
+# SSE 지원을 위해 필요할 수 있음 (또는 fastapi.responses.StreamingResponse 사용)
